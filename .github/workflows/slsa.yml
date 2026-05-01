@@ -1,0 +1,61 @@
+name: SLSA generic generator
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      digests: ${{ steps.hash.outputs.digests }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile $(git ls-files '*.py')
+
+      - name: Build Windows executable
+        run: |
+          pyinstaller --clean Kruger_Lab_System.spec
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kruger-lab-system-dist
+          path: dist/
+
+      - name: Generate subject for provenance
+        id: hash
+        shell: bash
+        run: |
+          files=$(find dist -type f | sort)
+          sha256sum $files | base64 -w0 > subjects.txt
+          echo "hashes=$(cat subjects.txt)" >> "${GITHUB_OUTPUT}"
+
+  provenance:
+    needs: [build]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.4.0
+    with:
+      base64-subjects: "${{ needs.build.outputs.digests }}"
+      upload-assets: true
