@@ -1,0 +1,7 @@
+openpyxl
+tkcalendar
+pandas
+reportlab
+Pillow
+arabic-reshaper
+python-bidi
